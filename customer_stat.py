@@ -8,16 +8,10 @@ from customer_class import Customer
 def customer_stat(bets_df):
     customer_list = []
 
-    unique_customer_list = bets_df[['Customer id', 'Customer name']].drop_duplicates().values.tolist()
+    for unique_customer, single_customer_bet_df in bets_df.groupby(['Customer id', 'Customer name']):
+        # create each unique Customer
+        new_customer = Customer(unique_customer[0], unique_customer[1], single_customer_bet_df)
 
-    for cus in unique_customer_list:
-
-        ## Process the bets of each customer
-        single_customer_bet_df = bets_df[bets_df['Customer name'] == cus[1]].reset_index(drop=True)
-        
-        # create new customer
-        new_customer = Customer(cus[0], cus[1], single_customer_bet_df)
-        
         # append new customer to the output list
         customer_list.append(new_customer.to_dict())
 
@@ -38,13 +32,21 @@ processed_bets_df = max_bet_rate(processed_bets_df)
 
 customer_df = customer_stat(processed_bets_df)
 
-output = customer_df.drop(['all_bets', 'settled_bets', 'bet_time_dict', 'lifetime_pnl_change'], axis=1)
-output = output.sort_values('last_bet_time', ascending=False)
-output.to_csv('result/Customer stat.csv', index=False)
+def market_league_analysis(customer_stat_df):
+    result_df = customer_stat_df[['name', 'no_of_settled_bet', 'market_dict', 'league_dict']]
+    result_df[['most_frequent_market', 'market_amount']] = customer_stat_df['market_dict'].apply(find_largest_dict_entry).apply(pd.Series) 
+    result_df['market %'] = round(result_df['market_amount'] / result_df['no_of_settled_bet'] * 100, 2)
 
-start_time = pd.Timestamp('2024-10-01 00:00:00+00:00', tz='UTC')
-end_time = pd.Timestamp('2024-11-01 00:00:00+00:00', tz='UTC')
+    result_df[['most_frequent_league', 'league_amount']] = customer_stat_df['league_dict'].apply(find_largest_dict_entry).apply(pd.Series)
+    result_df['league %'] = round(result_df['league_amount'] / result_df['no_of_settled_bet'] * 100, 2)
 
-oct_bets_df = processed_bets_df[(processed_bets_df['Place date'] > start_time) & (processed_bets_df['Place date'] < end_time)]
-oct_customer_df = customer_stat(oct_bets_df)
+    return result_df
 
+def find_largest_dict_entry(row):
+    if not(bool(row)):
+        return None, None
+    
+    else:
+        max_key = max(row, key= row.get)
+        max_value = row[max_key]
+        return max_key, max_value
